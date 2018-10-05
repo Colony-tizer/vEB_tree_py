@@ -1,5 +1,4 @@
 import math
-
 class VEBTree(object):
 	"""Class describes vEB tree
 	Attributes:
@@ -20,10 +19,9 @@ class VEBTree(object):
 			print("min: {}\tmax: {}".format(self.getMin(), self.getMax()))
 			if self.infoCluster != None:
 				line = ""
-				counter = 0
-				for cluster in self.infoCluster:
-					line += "Cluster no.{}| u = {}| min: {}\tmax: {}\n".format(counter, cluster.universum, cluster.getMin(), cluster.getMax())
-					counter += 1
+				for index, cluster in enumerate(self.infoCluster):
+					if cluster != None:
+						line += "Cluster no.{}| u = {}| min: {}\tmax: {}\n".format(index, cluster.universum, cluster.getMin(), cluster.getMax())
 				print(line)
 		else:
 			self.infoCluster[clusterNum].displayContent()
@@ -35,12 +33,14 @@ class VEBTree(object):
 					True	- if value is valid
 					False 	- if value is not valid
 		"""
-		if value == None or value >= self.universum or value < 0:
+		if value == None or type(value) != int or value >= self.universum or value < 0 :
 			return False
 		return True
 	def _fixUniversum(self) -> None:
 		"""Fixes the universum value if it was not the result of raising 2 to a power
 		"""
+		if self.universum < 2:
+			self.universum = 2
 		module = self._log2(self.universum) % 2
 		power = 0
 		if module != 0:
@@ -72,7 +72,7 @@ class VEBTree(object):
 		Return: 
 					int - index of the cluster
 		"""
-		return int(math.floor(value/self.sqrtUniversum())) 
+		return int(math.floor(value/self.sqrtUni)) 
 	def _low(self, value: int) -> int:
 		"""Calculates index of requested value in the cluster
 		Arguments:
@@ -80,7 +80,7 @@ class VEBTree(object):
 		Return: 
 					int - index of the value in the cluster
 		"""
-		return value % self.sqrtUniversum()
+		return value % self.sqrtUni
 	def _index(self, clusterNumber: int, valueNumber: int) -> int:
 		"""Calculates number which contains in the index [valueNumber] in the [clusterNumber]th cluster
 		Arguments:
@@ -89,16 +89,16 @@ class VEBTree(object):
 		Return: 
 					int - value which contains in the given index in the cluster with given index
 		"""
-		return clusterNumber * self.sqrtUniversum() + valueNumber
-	def _initResumes(self) -> None:
+		return clusterNumber * self.sqrtUni + valueNumber
+	def _initResumes(self, fill:bool = False) -> None:
 		""" Initializes summary cluster of VEBTree object"""
 		# If universum equals 2 than VEBTree object does not require summary cluster
 		if self.universum == 2:
 			self.resume = None
-		else:
+		elif fill == True:
 			# In other case VEBTree object needs summary cluster
-			self.resume = VEBTree(self.sqrtUniversum(True))
-	def _initCluster(self) -> None:
+			self.resume = VEBTree(self.sqrtUniversum(True), fill)
+	def _initCluster(self, fill:bool = False) -> None:
 		"""Initializes cluster section of VEBTree object"""
 		# If universum equals 2 than given VEBTree object is the base vEB tree
 		# Which contains only two members (both are numbers) and are stored in the min and max elements
@@ -108,21 +108,25 @@ class VEBTree(object):
 			# If universum is greater than 2
 			# Then VEBTree object is required to create the list of clusters 
 			# The length of the list calculates with help of sqrtUniversum(bool) function
-			self.infoCluster = [VEBTree(self.sqrtUniversum()) for count in range(self.sqrtUniversum(True))] 
-	def __init__(self, universum: int = 2) -> None:
+			if fill == False:
+				self.infoCluster = [None for count in range(self.sqrtUniversum(True))]
+			else:
+				self.infoCluster = [VEBTree(self.sqrtUni, fill) for count in range(self.sqrtUniversum(True))]
+	def __init__(self, universum: int = 2, fill: bool = False) -> None:
 		"""Initializing function of the VEBTree class
 		Arguments:
 					universum - the size of the universum for vEB tree
 		"""
 		self.universum = universum
+		self.sqrtUni = self.sqrtUniversum()
 		self._fixUniversum()
 		self._minElement = None
 		self._maxElement = None
 		self.resume = None
-		self._initResumes()
+		self._initResumes(fill)
 		self.infoCluster = None
-		self._initCluster()
-	def resetTree(self, universum: int = None):
+		self._initCluster(fill)
+	def resetTree(self, universum: int = None, fill: bool = False):
 		"""Function resets existing tree with size of the universum from 'universum'
 		   If universum is None - function just resets vEB tree with same value of the universum
 		   Otherwise new vEB tree is created with the size of the universum from 'universum'
@@ -131,7 +135,7 @@ class VEBTree(object):
 		"""
 		if universum == None:
 			universum = self.universum
-		self = VEBTree(universum)
+		self.__init__(universum, fill)
 	def getMin(self):
 		return self._minElement
 	def getMax(self):
@@ -151,13 +155,14 @@ class VEBTree(object):
 		elif self.universum == 2:
 			return False
 		else:
-			return self.infoCluster[self._high(value)].containsValue(self._low(value))
+			clustIndex = self._high(value)
+			if self.infoCluster[clustIndex] != None:
+				return self.infoCluster[clustIndex].containsValue(self._low(value))
+		return False
 	def _insertValueEmpty(self, value: int) -> None:
 		"""Inserts number into the empty base VEBTree object
 		Arguments:
 					value - int value
-					
-		TODO: define what is base VEBTree object
 		"""
 		if value != None:
 			self._minElement = value
@@ -182,24 +187,31 @@ class VEBTree(object):
 			if value < self.getMin():
 				# Function swaps values of variable 'value' and 'minElement'
 				# This happens because new number is less than minElement and it becomes new minimum element
+				# Also works with base VEBTree object (when it stores only one element)
 				tmp = self.getMin()
 				self._minElement = value
 				value = tmp
 			if self.universum > 2:
-				# In this line program knows that it deals with non base VEBTree object
-				#TODO: define what is the summary cluster
-				# So it awares that it should also update the summary clusters
-				if self.infoCluster[self._high(value)].getMin() == None:
+				clustIndex = self._high(value)
+				valueIndex = self._low(value)
+				if self.infoCluster[clustIndex] == None:
+					self.infoCluster[self._high(value)] = VEBTree(self.sqrtUniversum(self.universum))
+					# In this line program knows that it deals with non base VEBTree object
+					# So it awares that it should also update the summary clusters
+				if self.infoCluster[clustIndex].getMin() == None:
+					if self.resume == None:
+						self.resume = VEBTree(self.sqrtUniversum(True))
 					# The cluster is empty
 					# Function updates summary cluster according to the index of the updated cluster
-					self.resume.insertValue(self._high(value))
-					self.infoCluster[self._high(value)]._insertValueEmpty(self._low(value))
+					self.resume.insertValue(clustIndex)
+					self.infoCluster[clustIndex]._insertValueEmpty(valueIndex)
 				else:
 					# The cluster is not empty
-					# Dives into recursion
-					self.infoCluster[self._high(value)].insertValue(self._low(value))
-			# checks whether inserted value is the maximum value and updates in every(?) cluster which contains this value
+					# Dives into the recursion
+					self.infoCluster[clustIndex].insertValue(valueIndex)
+			# checks whether inserted value is the maximum value and updates in cluster which contains this value
 			if value  > self.getMax():
+				# Also can be the case where VEBTree object with universum = 2 (object stores only one element)
 				self._maxElement = value
 		return True
 	def getSuccessor(self, value: int) -> int:
@@ -224,17 +236,20 @@ class VEBTree(object):
 		elif self.getMin() != None and value < self.getMin():
 			return self.getMin()
 		else:
+			clustIndex = self._high(value)
+			valueIndex = self._low(value)
 			# Gets index of the max element of cluster which contains given value
-			maxIndex = self.infoCluster[self._high(value)].getMax()
-			# Checks whether successor is located in the same cluster as the given number
-			if maxIndex != None and maxIndex > self._low(value):
-				# Gets the index of the successor
-				offset = self.infoCluster[self._high(value)].getSuccessor(self._low(value))
-				return self._index(self._high(value), offset)
-			else:
-				# Successor is not in the same cluster as given value
-				# Searches for the next not empty cluster using summary cluster
-				succClust = self.resume.getSuccessor(self._high(value))
+			if self.infoCluster[clustIndex] != None:
+				maxIndex = self.infoCluster[clustIndex].getMax()
+				# Checks whether successor is located in the same cluster as the given number
+				if maxIndex != None and maxIndex > valueIndex:
+					# Gets the index of the successor
+					offset = self.infoCluster[clustIndex].getSuccessor(valueIndex)	
+					return self._index(clustIndex, offset)
+			# Successor is not in the same cluster as given value
+			# Searches for the next not empty cluster using summary cluster
+			if self.resume != None:
+				succClust = self.resume.getSuccessor(clustIndex)
 				if succClust != None:
 					# Gets the least element of the next not empty cluster
 					offset = self.infoCluster[succClust].getMin()
@@ -263,24 +278,27 @@ class VEBTree(object):
 		elif self.getMax() != None and value > self.getMax():
 			return self.getMax()
 		else:
-			# Gets index of the min element of cluster which contains given value
-			minIndex = self.infoCluster[self._high(value)].getMin()
-			# Checks whether predecessor is located in the same cluster as the given number
-			if minIndex != None and minIndex < self._low(value):
-				offset = self.infoCluster[self._high(value)].getPredecessor(self._low(value))
-				return self._index(self._high(value), offset)
-			else:
-				# Predecessor is not in the same cluster as given value
-				# Searches for the previous not empty cluster using summary cluster
-				predClus = self.resume.getPredecessor(self._high(value))
-				if predClus != None:
-					# Gets the greatest element of the next not empty cluster
-					offset = self.infoCluster[predClus].getMax()
-					return self._index(predClus, offset)
-				elif self.getMin() != None and value > self.getMin():
-					return self.getMin()
+			clustIndex = self._high(value)
+			valueIndex = self._low(value)
+			if self.infoCluster[clustIndex] != None:
+				# Gets index of the min element of cluster which contains given value
+				minIndex = self.infoCluster[clustIndex].getMin()
+				# Checks whether predecessor is located in the same cluster as the given number
+				if minIndex != None and minIndex < valueIndex:
+					offset = self.infoCluster[clustIndex].getPredecessor(valueIndex)
+					return self._index(clustIndex, offset)
 				else:
-					return None
+					# Predecessor is not in the same cluster as given value
+					# Searches for the previous not empty cluster using summary cluster
+					predClus = self.resume.getPredecessor(clustIndex)
+					if predClus != None:
+						# Gets the greatest element of the next not empty cluster
+						offset = self.infoCluster[predClus].getMax()
+						return self._index(predClus, offset)
+					elif self.getMin() != None and value > self.getMin():
+						return self.getMin()
+					else:
+						return None
 	def removeValue(self, value: int) -> bool:
 		"""Removes the given number from the VEBTree object if it contains removing value
 		Arguments:
@@ -313,28 +331,32 @@ class VEBTree(object):
 			# If removing value is the least element in the vEB tree
 			if value == self.getMin():
 				firstCluster = self.resume.getMin()
-				# Then function updates removing value to the successor of the least element of the tree
-				value = self._index(firstCluster, self.infoCluster[firstCluster].getMin())
-				# And updates minElement with 'value'
-				# Following actions remove presence of this value in the tree
-				self._minElement = value
-			success = self.infoCluster[self._high(value)].removeValue(self._low(value))
-			if success == True:
-				if self.infoCluster[self._high(value)].getMin() == None:
-					# If removing the given value results in emptiness of the cluster
-					# Then function accordingly updates summary clusters 
-					self.resume.removeValue(self._high(value))
-					# If removing value is the greatest in the vEB tree
-					if value == self.getMax():
-						maxClusterIndex = self.resume.getMax()
-						if maxClusterIndex == None:
-							# If vEB tree contains only one element
-							self._maxElement = self.getMin()
-						else:
-							# Otherwise function sets maxElement as predecessor of the removed maxElement
-							self._maxElement = self._index(maxClusterIndex, self.infoCluster[maxClusterIndex].getMax())
-				elif value == self.getMax():
-					# If removed value was the greatest element in the vEB tree
-					# Then function sets maxElement as predecessor of the removed maxElement
-					self._maxElement = self._index(self._high(value), self.infoCluster[self._high(value)].getMax())
+				if firstCluster != None:
+					# Then function updates removing value to the successor of the least element of the tree/
+					value = self._index(firstCluster, self.infoCluster[firstCluster].getMin())
+					# And updates minElement with 'value'
+					# Following actions remove presence of this value in the tree
+					self._minElement = value
+			clustIndex = self._high(value)
+			valueIndex = self._low(value)
+			if self.infoCluster[clustIndex] != None:
+				success = self.infoCluster[clustIndex].removeValue(valueIndex)
+				if success == True:
+					if self.infoCluster[clustIndex].getMin() == None:
+						# If removing the given value results in emptiness of the cluster
+						# Then function accordingly updates summary clusters 
+						self.resume.removeValue(clustIndex)
+						# If removing value is the greatest in the vEB tree
+						if value == self.getMax():
+							maxClusterIndex = self.resume.getMax()
+							if maxClusterIndex == None:
+								# If vEB tree contains only one element
+								self._maxElement = self.getMin()
+							else:
+								# Otherwise function sets maxElement as predecessor of the removed maxElement
+								self._maxElement = self._index(maxClusterIndex, self.infoCluster[maxClusterIndex].getMax())
+					elif value == self.getMax():
+						# If removed value was the greatest element in the vEB tree
+						# Then function sets maxElement as predecessor of the removed maxElement
+						self._maxElement = self._index(clustIndex, self.infoCluster[clustIndex].getMax())
 		return success
